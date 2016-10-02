@@ -6,11 +6,11 @@
 #include <string.h>
 #include <time.h>
 
-#define LINE_MAX 40
+#define LINE_MAX 900 
 
 extern int errno;
 
-void CPU(int *mem_pipe, int *cpu_pipe);
+void CPU(int *mem_pipe, int *cpu_pipe, int timer);
 void Memory(int *mem_pipe, int *cpu_pipe, char input_file[]);
 void load_instructions(int memory[], char input_file[]);
 void mem_read(int *mem_pipe,int *cpu_pipe, int *mem);
@@ -24,6 +24,12 @@ int main(int argc, char *argv[]) {
         printf("Not enough arguments, need instruction file\n");
         return -1;
     }
+	if(argc >=3){
+		if(argv[2] <= 0){
+			printf("Error, timer is not a realistic value! Exiting...");
+			return -1;
+		}	
+	}
     /**
      * memory_pipe: (from CPU to memory)
      *          [0] : input for memory
@@ -35,7 +41,10 @@ int main(int argc, char *argv[]) {
 	srand(time(NULL));
     int memory_pipe[2];
     int cpu_pipe[2];
-    
+    int timer = 0;
+	if(argc >=3)
+		timer = atoi(argv[2]);
+
     pipe(cpu_pipe);
     pipe(memory_pipe);
 
@@ -43,26 +52,49 @@ int main(int argc, char *argv[]) {
     pid = fork();
 
     if(pid == 0)
-        CPU(memory_pipe, cpu_pipe);
+        CPU(memory_pipe, cpu_pipe, timer);
     else
         Memory(memory_pipe, cpu_pipe, argv[1]);
 }
 
-void CPU(int *mem_pipe, int *cpu_pipe){
+void CPU(int *mem_pipe, int *cpu_pipe, int timer){
     close(mem_pipe[0]);         
     close(cpu_pipe[1]);         
-    int PC=0,SP=0,IR=0,AC=0,X=0,Y=0;
-	char read_buf[20]="0";
-	char write_buf[20]="";
+    int PC=0,SP=999,IR=0,AC=0,X=0,Y=0;
+	char read_buf[40];
+	char write_buf[40];
+	int timer_counter = timer;
 	do{
-		write_buf[0] = '1';
-		write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
-		
+		memset(read_buf,0,sizeof(read_buf));
+		memset(write_buf,0,sizeof(write_buf));
+		if((timer_counter == 0)&&(PC <1000)&&(timer != 0)){
+			write(mem_pipe[1], "2", 2);
+			sprintf(write_buf, "%d", 1999);
+			write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
+			sprintf(write_buf, "%d", SP);
+			write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
+			SP = 1998;
+			
+			write(mem_pipe[1], "2", 2);
+			sprintf(write_buf, "%d", SP);
+			write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
+			sprintf(write_buf, "%d", PC);
+			write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
+			PC = 1000;		
+			timer_counter = timer;
+		}
+		else if((timer_counter > 0)&&(PC <1000)&&(timer!=0)){
+			timer_counter--;	
+		}
+		write(mem_pipe[1], "1", 2);
 		sprintf(write_buf, "%d", PC);
 		PC++;
 		write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
 		read(cpu_pipe[0], read_buf,sizeof(read_buf));
 		IR = atoi(read_buf);
+		//printf("SP = %d\n", SP);
+		
+		//printf("PC=%d,SP=%d,IR=%d,AC=%d,X=%d,Y=%d\n",PC,SP,IR,AC,X,Y);
 		switch(IR){
 			case 1:
 				write(mem_pipe[1], "1", 2);
@@ -71,7 +103,7 @@ void CPU(int *mem_pipe, int *cpu_pipe){
 				PC++;
 				write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
 				read(cpu_pipe[0], read_buf, sizeof(read_buf));
-
+				
 				AC = atoi(read_buf);
 				break;
 			case 2:
@@ -81,7 +113,11 @@ void CPU(int *mem_pipe, int *cpu_pipe){
 				PC++;
 				write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
 				read(cpu_pipe[0], read_buf, sizeof(read_buf));
-
+				if((atoi(read_buf) > 999)&&(PC < 1000)){
+					printf("Error: Loading from protected memory, exiting...\n");
+					IR = 50;
+					break;
+				}
 				write(mem_pipe[1], "1", 2);
 				write(mem_pipe[1], read_buf, (strlen(read_buf)+1));
 				read(cpu_pipe[0], read_buf, sizeof(read_buf));
@@ -95,10 +131,20 @@ void CPU(int *mem_pipe, int *cpu_pipe){
 				PC++;
 				write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
 				read(cpu_pipe[0], read_buf, sizeof(read_buf));
+				if((atoi(read_buf) > 999)&&(PC < 1000)){
+					printf("Error: Loading from protected memory, exiting...\n");
+					IR = 50;
+					break;
+				}
 
 				write(mem_pipe[1], "1", 2);
 				write(mem_pipe[1], read_buf, (strlen(read_buf)+1));
 				read(cpu_pipe[0], read_buf, sizeof(read_buf));
+				if((atoi(read_buf) > 999)&&(PC < 1000)){
+					printf("Error: Loading from protected memory, exiting...\n");
+					IR = 50;
+					break;
+				}
 				
 				write(mem_pipe[1], "1", 2);
 				write(mem_pipe[1], read_buf, (strlen(read_buf)+1));
@@ -110,12 +156,17 @@ void CPU(int *mem_pipe, int *cpu_pipe){
 				write(mem_pipe[1], "1", 2);
 
                 sprintf(write_buf, "%d", PC);
-                PC++;
+				PC++;
                 write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
                 read(cpu_pipe[0], read_buf, sizeof(read_buf));
 				
 				sprintf(write_buf, "%d", atoi(read_buf) + X); 
-
+				if((atoi(write_buf) > 999)&&(PC < 1000)){
+					printf("Error: Loading from protected memory, exiting...\n");
+					IR = 50;
+					break;
+				}
+				
                 write(mem_pipe[1], "1", 2);
 				write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
                 read(cpu_pipe[0], read_buf, sizeof(read_buf));
@@ -131,6 +182,11 @@ void CPU(int *mem_pipe, int *cpu_pipe){
                 read(cpu_pipe[0], read_buf, sizeof(read_buf));
 				
 				sprintf(write_buf, "%d", atoi(read_buf) + Y); 
+				if((atoi(write_buf) > 999)&&(PC < 1000)){
+					printf("Error: Loading from protected memory, exiting...\n");
+					IR = 50;
+					break;
+				}
 
                 write(mem_pipe[1], "1", 2);
 				write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
@@ -143,6 +199,11 @@ void CPU(int *mem_pipe, int *cpu_pipe){
 				write(mem_pipe[1], "1", 2);
 
 				sprintf(write_buf, "%d", SP + X);
+				if((atoi(write_buf) > 999)&&(PC < 1000)){
+					printf("Error: Loading from protected memory, exiting...\n");
+					IR = 50;
+					break;
+				}
 				write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
 				read(cpu_pipe[0], read_buf, sizeof(read_buf));
 				
@@ -155,11 +216,6 @@ void CPU(int *mem_pipe, int *cpu_pipe){
 				PC++;
 				write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
 				read(cpu_pipe[0], read_buf, sizeof(read_buf));
-
-				write(mem_pipe[1], "1", 2);
-				write(mem_pipe[1], read_buf, (strlen(read_buf)+1));
-				read(cpu_pipe[0], read_buf, sizeof(read_buf));
-			
 					
 				write(mem_pipe[1], "2", 2);
 				write(mem_pipe[1], read_buf, (strlen(read_buf)+1));
@@ -179,7 +235,7 @@ void CPU(int *mem_pipe, int *cpu_pipe){
 				if(atoi(read_buf) == 1)
 					printf("%d",AC);				
 				else if(atoi(read_buf) == 2)
-					printf("%hhu\n",AC);
+					printf("%c",(char)AC);
 				else
 					printf("Port number %d unrecognized!\n", atoi(read_buf));
 				break;
@@ -257,10 +313,11 @@ void CPU(int *mem_pipe, int *cpu_pipe){
 				write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
 				read(cpu_pipe[0], read_buf, sizeof(read_buf));
 				
+				SP--;
 				write(mem_pipe[1], "2", 2);
 				sprintf(write_buf, "%d", SP);
 				write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
-				SP--;
+				
 				sprintf(write_buf, "%d", PC);
 				write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
 				
@@ -269,10 +326,10 @@ void CPU(int *mem_pipe, int *cpu_pipe){
 			case 24:
 				//Read Address from stack
 				write(mem_pipe[1], "1", 2);
-				SP--;
 				sprintf(write_buf, "%d", SP);
 				write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
 				read(cpu_pipe[0], read_buf, sizeof(read_buf));
+				SP++;
 
 				PC = atoi(read_buf);
 				break;
@@ -283,27 +340,48 @@ void CPU(int *mem_pipe, int *cpu_pipe){
 				X--;
 				break;
 			case 27:
+				SP--;
 				write(mem_pipe[1], "2", 2);
 				sprintf(write_buf, "%d", SP);
 				write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
-				SP--;
 				sprintf(write_buf, "%d", AC);
 				write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
 				break;
 			case 28:
 				write(mem_pipe[1], "1", 2);
-				SP--;
 				sprintf(write_buf, "%d", SP);
 				write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
 				read(cpu_pipe[0], read_buf, sizeof(read_buf));
-
+				SP++;
 				AC = atoi(read_buf);
 				
 				break;
 			case 29:
-				
+			 	write(mem_pipe[1], "2", 2);
+                write(mem_pipe[1], "1999", 5);
+				sprintf(write_buf, "%d", SP);
+				write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
+	 			SP = 1998;
+		
+				write(mem_pipe[1], "2", 2);
+                sprintf(write_buf, "%d", SP);
+                write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
+				sprintf(write_buf, "%d", PC);
+				write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
+				PC = 1500;		
 				break;
 			case 30:
+				write(mem_pipe[1], "1", 2);
+                sprintf(write_buf, "%d", SP);
+                write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
+                read(cpu_pipe[0], read_buf, sizeof(read_buf));
+                PC = atoi(read_buf);
+				SP++;	
+				write(mem_pipe[1], "1", 2);
+                sprintf(write_buf, "%d", SP);
+                write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
+                read(cpu_pipe[0], read_buf, sizeof(read_buf));
+                SP = atoi(read_buf);
 				break;
 			case 50:
 				break;
@@ -329,11 +407,14 @@ void Memory(int *mem_pipe, int *cpu_pipe, char input_file[]){
 	
     load_instructions(memory, input_file);
     
-	//int i;
-    //for(i=0;i<10;i++){
-    //    printf("Instruction %d: %d\n", i,memory[i]);
-    //}
-
+	int i;
+    /*for(i=0;i<30;i++){
+        printf("Memory %d: %d\n", i,memory[i]);
+    }
+    for(i=1000;i<1010;i++){
+        printf("Memory %d: %d\n", i,memory[i]);
+    }
+	*/
 	int read_byte;
 	char read_buf[2]; 
 	do{
@@ -343,11 +424,11 @@ void Memory(int *mem_pipe, int *cpu_pipe, char input_file[]){
 				printf("Exiting Program...\n"); 
 				break;
 			case '1':
-				printf("READ\n");
+				//printf("READ\n");
 				mem_read(mem_pipe, cpu_pipe, memory);
 				break;
 			case '2':
-				printf("WRITE\n");
+				//printf("WRITE\n");
 				mem_write(mem_pipe, memory);
 				break;
 			default:	
@@ -390,6 +471,7 @@ void load_instructions(int memory[], char input_file[]){
             memory[instr_counter] = instr;
             instr_counter++;
         }
+		//memset(buf,0,sizeof(buf));
     }
 }
 
@@ -397,17 +479,19 @@ void mem_read(int *mem_pipe, int *cpu_pipe, int *mem){
 	char read_buf[20];
 	read(mem_pipe[0], read_buf, sizeof(read_buf));
 	int address = atoi(read_buf);
+	//printf("Read at address %d is %d\n", address, mem[address]);
 	char data[20];
 	sprintf(data, "%d", mem[address]);
 	write(cpu_pipe[1], data, (strlen(data)+1));
 }
 
 void mem_write(int *mem_pipe, int *mem){
-	char read_buf[20];
+	char read_buf[40];
 	int address, data;
 	read(mem_pipe[0], read_buf, sizeof(read_buf));
 	address = atoi(read_buf);
 	read(mem_pipe[0], read_buf, sizeof(read_buf));
 	data = atoi(read_buf);
-	mem[address] = data; 
+	mem[address] = data;
+	//printf("Write address: %d data: %d\n", address, data);
 }
