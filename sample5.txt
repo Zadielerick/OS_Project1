@@ -1,0 +1,72 @@
+8	//Load random number 1-100 in AC
+16	//CPYtoY
+1	//Load 700 into X
+700
+14	//CPtoX
+4	//Load 0+X into AC
+0
+12	//AC=AC-Y
+21	//Jump to conclusion if zero
+18
+25	//Increment X
+1	//Load 725 into AC 
+725
+12	//AC = AC - X
+21	//Jump if reached end of list
+24	//Jump address for not prime number
+20	//Jump to Load 0+X into AC
+5 	//Jump back to 5
+1	//Load 'Y' into AC
+89
+9	//Put as char
+2
+20 	//Jump to End
+39
+1	//Load 'N' into AC
+78
+9	//Put as char	
+2
+1	//Load space
+32
+9	//Put as Char
+2
+17 	//Copy from Y
+9	//Put as Integer
+1
+1	//Load newline
+10
+9	//Put newline
+2
+50	//Exit
+
+
+
+.700
+2
+3
+5
+7
+11
+13
+17
+19
+23
+29
+31
+37
+41
+43
+47
+53
+59
+61
+67
+71
+73
+79
+83
+89
+97
+//Will Load Random number and return whether it is prime or not with
+//a Y for "YES" and N for "NO" followed by the number
+

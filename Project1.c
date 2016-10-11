@@ -24,6 +24,9 @@ int main(int argc, char *argv[]) {
         printf("Not enough arguments, need instruction file\n");
         return -1;
     }
+	/**
+     * Checks that timer is realistic
+     */
 	if(argc >=3){
 		if(argv[2] <= 0){
 			printf("Error, timer is not a realistic value! Exiting...");
@@ -50,12 +53,17 @@ int main(int argc, char *argv[]) {
 
     pid_t pid;
     pid = fork();
-
+	/**
+     * Fork split
+     */
     if(pid == 0)
         CPU(memory_pipe, cpu_pipe, timer);
     else
         Memory(memory_pipe, cpu_pipe, argv[1]);
 }
+/**
+ * CPU Process that does all the logic and makes requests to Memory 
+ */
 
 void CPU(int *mem_pipe, int *cpu_pipe, int timer){
     close(mem_pipe[0]);         
@@ -92,9 +100,6 @@ void CPU(int *mem_pipe, int *cpu_pipe, int timer){
 		write(mem_pipe[1], write_buf, (strlen(write_buf)+1));
 		read(cpu_pipe[0], read_buf,sizeof(read_buf));
 		IR = atoi(read_buf);
-		//printf("SP = %d\n", SP);
-		
-		//printf("PC=%d,SP=%d,IR=%d,AC=%d,X=%d,Y=%d\n",PC,SP,IR,AC,X,Y);
 		switch(IR){
 			case 1:
 				write(mem_pipe[1], "1", 2);
@@ -471,7 +476,6 @@ void load_instructions(int memory[], char input_file[]){
             memory[instr_counter] = instr;
             instr_counter++;
         }
-		//memset(buf,0,sizeof(buf));
     }
 }
 
@@ -479,7 +483,6 @@ void mem_read(int *mem_pipe, int *cpu_pipe, int *mem){
 	char read_buf[20];
 	read(mem_pipe[0], read_buf, sizeof(read_buf));
 	int address = atoi(read_buf);
-	//printf("Read at address %d is %d\n", address, mem[address]);
 	char data[20];
 	sprintf(data, "%d", mem[address]);
 	write(cpu_pipe[1], data, (strlen(data)+1));
@@ -493,5 +496,4 @@ void mem_write(int *mem_pipe, int *mem){
 	read(mem_pipe[0], read_buf, sizeof(read_buf));
 	data = atoi(read_buf);
 	mem[address] = data;
-	//printf("Write address: %d data: %d\n", address, data);
 }
